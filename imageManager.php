@@ -24,7 +24,11 @@ class imageManager {
      * Initialize plugin (call to add the submenu page)
      */
     public function init() {
+        // Add the submenu under Media
         add_action('admin_menu', array($this,'add_submenu_page'));
+
+        // Register css
+        add_action('admin_enqueue_scripts', array($this, 'add_css'));
     }
 
     /**
@@ -40,11 +44,17 @@ class imageManager {
         );
     }
 
+    public function add_css() {
+        wp_enqueue_style('admin_css', plugin_dir_url(__FILE__)."/style.css");
+    }
+
     /**
      * prints the whole admin page where this plugin shows functionality to the user
      */
     public static function display_thePage() {
         global $wpdb; // get wpdb from wordpress
+
+        echo '<div class="viddeImageManager">';
     
         // Get all "attachments" from the database
         $db_attachments = get_posts( array(
@@ -72,29 +82,59 @@ class imageManager {
                     )
                 );
                 if(empty($posts_containing_image)) {
-                    echo '<li tabindex="0" role="checkbox" aria-label="post_9478" aria-checked="false" data-id="'.$post->ID.'"
-                         class="attachment save-ready">';
-                    // echo '<pre>'.print_r($posts_containing_image,1).'</pre>';
                     setup_postdata($post);
-                    // the_title();
-                    the_attachment_link($post->ID, fullsize: false, permalink: true);
-                    // the_excerpt();
 
+                    // Get information about the upload
+                    $info = array();
                     if ( $post->post_parent ) {
                         $post_parent = get_post( $post->post_parent );
-                        $info = array();
                         if ( $post_parent ) {
                             $info['uploadedToTitle'] = $post_parent->post_title ? $post_parent->post_title : __( '(no title)' );
                             $info['uploadedToLink']  = get_edit_post_link( $post->post_parent, 'raw' );
                         }
-                        echo 'info:<pre>'.print_r($info,1).'</pre>';
+                    }
+                    // Uploaded and modified times
+                    $info['date'] = date("Y-m-d H:i", strtotime( $post->post_date_gmt ));
+                    if ( $post->post_modified_gmt != $post->post_date_gmt )
+                        $info['modified'] =  date("Y-m-d H:i", strtotime( $post->post_modified_gmt ));
+
+                    $info['filename']      = wp_basename( get_attached_file( $post->ID ) );
+                    $info['editlink']      = get_edit_post_link($post);
+
+                    // Uploaded by
+                    $author = new \WP_User( $post->post_author );
+
+                    $info['uploaded_by_name'] = __( '(no author)' );
+                    $info['uploaded_by_link'] = '';
+
+                    if ( $author->exists() ) {
+                        $info['uploaded_by_name'] = $author->display_name ? $author->display_name : $author->nickname;
+                        $info['uploaded_by_link'] = get_edit_user_link( $author->ID );
                     }
 
-                    echo '</li>';
+                    // Print it pretty
+                    echo '<li tabindex="0" role="checkbox" aria-label="post_9478" aria-checked="false" data-id="'.$post->ID.'"
+                         class="attachment save-ready"><div class="image">';
+                            the_attachment_link($post->ID, fullsize: false, permalink: true);
+                        echo '</div><div class="info">';
+                            // Printing info about the image
+                            echo "<p><strong>".__("Uploaded:")."</strong> ".$info['date']."</p>";
+                            echo "<p><strong>".__("Filename:")."</strong> ".$info['filename']."</p>";
+                            if(isset($info['uploadedToTitle']))
+                                echo "<p><strong>".__("Uploaded to:")."</strong> ".sprintf('<a href="%s">%s</a>', $info['uploadedToLink'], $info['uploadedToTitle'])."</p>";
+                            // echo "<p><strong>".__("Uploaded to:")."</strong> ".sprintf('<a href="%s">%s</a>', $info['uploadedToLink'], $info['uploadedToTitle'])."</p>";
+
+                            echo '<p><strong>'.__("Uploaded by:").'</strong> '.
+                                ($info['uploaded_by_link'] ? sprintf('<a href="%s">%s</a>', $info['uploaded_by_link'], $info['uploaded_by_name']) : $info['uploaded_by_name']).
+                                '</p>';
+                            echo sprintf('<p><a class="button edit-attachment" href="%s">%s</a></p>',$info['editlink'], __( 'Edit Image' ));
+                        echo '</div></li>';
                 }
             }
             echo "</ul></div></form>";
         }
+
+        echo '</div>'; // class:viddeImageManager
     }
 }
 
